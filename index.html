@@ -1,0 +1,149 @@
+
+<!DOCTYPE html>
+<html>
+  <meta charset="UTF-8">
+  <title>Mandelbrot set</title>
+
+  <style>
+
+  body {
+    background-color: black;
+  }
+
+  #container {
+    width: 100%;
+    text-align: center;
+  }
+
+  #plot {
+    display: inline-block;
+  }
+  </style>
+
+  <body>
+    <div id="container">
+      <canvas id="plot" ></canvas>
+    </div>
+
+    <script>
+    // Get canvas object and context
+    var canvas = document.getElementById('plot');
+    var ctx = canvas.getContext('2d');
+
+    ctx.canvas.height = window.innerHeight - 20;
+    ctx.canvas.width  = ctx.canvas.height;
+
+    // Specify the range of plot in the complex plane.
+    // We assume it's of the form [xMin, xMax, yMin, yMax]
+    var range = [-2, 2, -2, 2];
+
+    // The stride is inversely proportional to resolution. Lesser values implies higher resolution
+    // at computational cost. It is the amount of pixels skiped per xStep or yStep.
+    let stride = 1.0;
+
+    // Number of steps without point blowing up to be considered in the Mandelbrot set
+    let maxSteps = 512;
+
+    // In all the functions below we model a complex number as a hash {"Re": x, "Im": y}
+    function squared_modulus(z) {
+      return z.Re*z.Re + z.Im*z.Im;
+    }
+
+    // Compute one step of the iteration. Note that if z = x + iy and c = a + bi, then we have:
+    // z^2 + c = (x^2 - y^2 + a) + i(2xy + b)
+    function compute(z, c) {
+      return {
+        "Re": z.Re*z.Re - z.Im*z.Im + c.Re,
+        "Im": 2*z.Re*z.Im + c.Im
+        }
+    }
+
+    // Compute number of iterations before point modulus get bigger than 2
+    function stepsToBlowup(c) {
+      var steps;
+      var z = {"Re": 0.0, "Im": 0.0};
+      for(steps = 0; steps <= maxSteps; steps++) {
+        z = compute(z, c);
+        if(squared_modulus(z) > 4) {
+          break;
+        }
+      }
+      return steps;
+    }
+
+    // Colors to be cycled
+    var colors = [
+      [0, 158, 227],
+      [0, 146, 214],
+      [0, 128, 196],
+      [65, 105, 176],
+      [3, 160, 117],
+      [2, 186, 132],
+      [3, 216, 150],
+      [68, 253, 159],
+      [129, 255, 171],
+      [252, 251, 186],
+      [255, 188, 110],
+      [249, 140, 83],
+      [239, 100, 71]
+    ];
+
+
+    function color(c) {
+      let steps = stepsToBlowup(c);
+      if(steps >= maxSteps){
+        return "#000";  // Print with black points inside the set
+      }
+
+      let color = colors[steps % colors.length];
+      return "rgb(" + color[0] + "," + color[1] + "," + color[2] + ")";
+    }
+
+    // Function to plot set with given stride
+    function plot(context, stride) {
+
+      let [xMin, xMax, yMin, yMax] = range;
+
+      // We are transforming [min, max] to [0, canvasLinearSize] linearly.
+      // Here, Scale is our angular coefficient and Offset is our linear coefficient.
+      let xScale = context.canvas.width/(xMax - xMin);
+      let yScale = context.canvas.height/(yMax - yMin);
+
+      let xOffset = -xScale*xMin;
+      let yOffset = -yScale*yMin;
+
+      // Compute step size in plots dimensions (stepFactor is in pixels)
+      let xStep = stride/xScale;
+      let yStep = stride/yScale;
+
+      // Draw a rectangle for each superpixel in our image (if stepFactor = 1, we draw pixels)
+      for(let x = xMin; x <= xMax; x += xStep){
+        for(let y = yMin; y <= yMax; y += yStep){
+          let c = {"Re": x, "Im": y};
+          context.fillStyle = color(c);
+          context.fillRect(xScale*x + xOffset, yScale*y + yOffset, stride, stride);
+        }
+      }
+    }
+
+    function overlay(context) {
+      // Darken canvas
+      context.fillStyle = "rgba(0, 0, 0, 0.75)";
+      context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+      context.font = "48px Baskerville";
+      context.fillStyle = "#aaaaaa";
+      context.textAlign = 'center';
+      context.fillText("Computing...", context.canvas.width/2, context.canvas.height/2);
+    }
+
+    function plotMain(){
+      // Add loading overlay
+      overlay(ctx);
+      // To give overlay time to render, we need to set a timeout
+      setTimeout(function(){plot(ctx, stride)}, 2);
+    }
+
+    plotMain();
+  </script>
+  </body>
+</html>
