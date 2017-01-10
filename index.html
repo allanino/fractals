@@ -121,7 +121,7 @@
         for(let y = yMin; y <= yMax; y += yStep){
           let c = {"Re": x, "Im": y};
           context.fillStyle = color(c);
-          context.fillRect(xScale*x + xOffset, yScale*y + yOffset, stride, stride);
+          context.fillRect(xScale*x + xOffset - stride/2, yScale*y + yOffset - stride/2, stride, stride);
         }
       }
     }
@@ -136,14 +136,80 @@
       context.fillText("Computing...", context.canvas.width/2, context.canvas.height/2);
     }
 
-    function plotMain(){
-      // Add loading overlay
-      overlay(ctx);
-      // To give overlay time to render, we need to set a timeout
-      setTimeout(function(){plot(ctx, stride)}, 2);
+    // Incrementaly plot with different resolutions
+    function plotLowRes(){
+      setTimeout(function(){
+        plot(ctx, 8);
+        setTimeout(function(){
+          plot(ctx, 4);
+        }, 1);
+      }, 1);
     }
 
-    plotMain();
+    // Plot low resolution and set timeout to plot a high resolution version
+    plotLowRes();
+    var timer = setTimeout(function(){plot(ctx, 1)}, 100);
+
+    // Check key presses
+    document.onkeydown = checkKey;
+    function checkKey(e) {
+
+      // Stop high resolution rendering if user is pressing keys too fast
+      clearTimeout (timer);
+
+      e = e || window.event;
+
+      let stepFactor = 0.05;
+      let zoomFactor = 2.0;
+
+      if (e.keyCode == '40') { // up arrow
+        let delta = stepFactor*(range[3] - range[2]);
+        range[2] = range[2] + delta;
+        range[3] = range[3] + delta;
+      }
+      else if (e.keyCode == '38') { // down arrow
+        let delta = stepFactor*(range[3] - range[2]);
+        range[2] = range[2] - delta;
+        range[3] = range[3] - delta;
+      }
+      else if (e.keyCode == '39') { // left arrow
+        let delta = stepFactor*(range[1] - range[0]);
+
+        range[0] = range[0] + delta;
+        range[1] = range[1] + delta;
+      }
+      else if (e.keyCode == '37') { // right arrow
+        let delta = stepFactor*(range[1] - range[0]);
+
+        range[0] = range[0] - delta;
+        range[1] = range[1] - delta;
+      }
+      else if (e.keyCode == '87') { // w (zoom in)
+        let deltaX = (range[1] - range[0])/(2*zoomFactor);
+        let deltaY = (range[3] - range[2])/(2*zoomFactor);
+
+        range[0] = range[0] + deltaX;
+        range[1] = range[1] - deltaX;
+
+        range[2] = range[2] + deltaY;
+        range[3] = range[3] - deltaY;
+      }
+      else if (e.keyCode == '83') { // s (zoom out)
+        let deltaX = (range[1] - range[0])/(2.0*(zoomFactor -1));
+        let deltaY = (range[3] - range[2])/(2.0*(zoomFactor -1));
+
+        range[0] = range[0] - deltaX;
+        range[1] = range[1] + deltaX;
+
+        range[2] = range[2] - deltaY;
+        range[3] = range[3] + deltaY;
+      }
+
+      // Plot low resolution version and reset high resolution timer
+      plotLowRes();
+      timer = setTimeout(function(){plot(ctx, 1)}, 1000);
+    }
+
   </script>
   </body>
 </html>
