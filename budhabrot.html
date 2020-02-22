@@ -41,8 +41,8 @@
     // at computational cost. It is the amount of pixels skiped per xStep or yStep.
     let stride = 1.0;
 
-    // Number of steps without point blowing up to be considered in the Mandelbrot set
-    let maxSteps = 512;
+    // Number of points to sample (number of trajectories to consider)
+    let numSamples = 10000000;
 
     // In all the functions below we model a complex number as a hash {"Re": x, "Im": y}
     function squared_modulus(z) {
@@ -58,8 +58,8 @@
         }
     }
 
-    // Compute number of iterations before point modulus get bigger than 2
-    function computeTrajectory(c) {
+    // Compute number of iterations until point modulus get bigger than 2 (guaranteed scape)
+    function computeTrajectory(c, maxSteps) {
       var trajectory = [];
       var z = {"Re": 0.0, "Im": 0.0};
       for(let steps = 0; steps <= maxSteps; steps++) {
@@ -72,43 +72,41 @@
       return null;
     }
 
-    function color(c) {
-      let intensity = 255.0*c;
-      let color = [intensity, intensity, intensity];
-      return "rgb(" + color[0] + "," + color[1] + "," + color[2] + ")";
-    }
-
-    class Box {
-      constructor(xmin, xmax, ymin, ymax) {
-        this.xmin = xmin;
-        this.xmax = xmax;
-        this.ymin = ymin;
-        this.ymax = ymax;
-        this.count = 0;
+    function colorIntensity(rawIntensity) {
+      if(rawIntensity < 0.5) {
+        return 255.0*Math.pow(rawIntensity, 0.7);
+      } else {
+        return 255.0*Math.pow(rawIntensity, 0.05);
       }
     }
 
-    // Function to plot set with given stride
-    function plot(context, stride) {
+    function color(r, g, b) {
+      r = colorIntensity(r);
+      g = colorIntensity(g);
+      b = colorIntensity(b);
+      return "rgb(" + r + "," + g + "," + b + ")";
+    }
 
-      let [xMin, xMax, yMin, yMax] = range;
+    // Function to compute boxes statistics
+    let [xMin, xMax, yMin, yMax] = range;
+    let xIndex = {};
+    let yIndex = {};
 
-      // We are transforming [min, max] to [0, canvasLinearSize] linearly.
-      // Here, Scale is our angular coefficient and Offset is our linear coefficient.
-      let xScale = context.canvas.width/(xMax - xMin);
-      let yScale = context.canvas.height/(yMax - yMin);
+    // We are transforming [min, max] to [0, canvasLinearSize] linearly.
+    // Here, Scale is our angular coefficient and Offset is our linear coefficient.
+    let xScale = ctx.canvas.width/(xMax - xMin);
+    let yScale = ctx.canvas.height/(yMax - yMin);
 
-      let xOffset = -xScale*xMin;
-      let yOffset = -yScale*yMin;
+    // Compute step size in plots dimensions (stepFactor is in pixels)
+    let xStep = stride/xScale;
+    let yStep = stride/yScale;
 
-      // Compute step size in plots dimensions (stepFactor is in pixels)
-      let xStep = stride/xScale;
-      let yStep = stride/yScale;
+    let xOffset = -xScale*xMin;
+    let yOffset = -yScale*yMin;
 
+    function computeBoxes(maxSteps) {
       // Initialize boxes
       let boxes = [];
-      let xIndex = {};
-      let yIndex = {};
       for(let x = xMin; x <= xMax; x += xStep){
         xIndex[Math.floor(x/xStep)] = boxes.length;
         boxes.push([]);
@@ -120,11 +118,11 @@
 
       // Sample trajectories, incrementing boxes if trajectories escapes
       let max = 1;
-      for(let i=0; i < 10000000; i++) {
+      for(let i=0; i < numSamples; i++) {
         let x = xMin + (xMax - xMin)*Math.random();
         let y = yMin + (yMax - yMin)*Math.random();
         let c = {'Re': x, 'Im': y};
-        let trajectory = computeTrajectory(c);
+        let trajectory = computeTrajectory(c, maxSteps);
         if(trajectory) {
           for(let j = 0; j < trajectory.length; j++) {
             let p = trajectory[j];
@@ -142,14 +140,29 @@
         for(let y = yMin; y <= yMax; y += yStep){
           xi = xIndex[Math.floor(x/xStep)];
           yi = yIndex[Math.floor(y/yStep)];
-          let c = boxes[xi][yi]/max;
-          context.fillStyle = color(c);
+          boxes[xi][yi] = boxes[xi][yi]/max;
+        }
+      }
+
+      return boxes;
+    }
+
+    function plot(context) {
+      let red = computeBoxes(5000);
+      let green = computeBoxes(500);
+      let blue = computeBoxes(50);
+
+      for(let x = xMin; x <= xMax; x += xStep){
+        for(let y = yMin; y <= yMax; y += yStep){
+          xi = xIndex[Math.floor(x/xStep)];
+          yi = yIndex[Math.floor(y/yStep)];
+          context.fillStyle = color(red[xi][yi], green[xi][yi], blue[xi][yi]);
           context.fillRect(yScale*y + yOffset - stride/2, xScale*x + xOffset - stride/2, stride, stride);
         }
       }
     }
 
-    plot(ctx, 1);
+    plot(ctx);
   </script>
   </body>
 </html>
