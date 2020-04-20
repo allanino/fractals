@@ -41,9 +41,6 @@
     // at computational cost. It is the amount of pixels skiped per xStep or yStep.
     let stride = 1.0;
 
-    // Number of points to sample (number of trajectories to consider)
-    let numSamples = 10000000;
-
     // In all the functions below we model a complex number as a hash {"Re": x, "Im": y}
     function squared_modulus(z) {
       return z.Re*z.Re + z.Im*z.Im;
@@ -73,11 +70,7 @@
     }
 
     function colorIntensity(rawIntensity) {
-      if(rawIntensity < 0.5) {
-        return 255.0*Math.pow(rawIntensity, 0.7);
-      } else {
-        return 255.0*Math.pow(rawIntensity, 0.05);
-      }
+      return 255.0*Math.pow(rawIntensity, 0.9);
     }
 
     function color(r, g, b) {
@@ -104,20 +97,20 @@
     let xOffset = -xScale*xMin;
     let yOffset = -yScale*yMin;
 
-    function computeBoxes(maxSteps) {
+    function computeBoxes(maxSteps, numSamples = 1000000, boxes = [], max = 1) {
       // Initialize boxes
-      let boxes = [];
-      for(let x = xMin; x <= xMax; x += xStep){
-        xIndex[Math.floor(x/xStep)] = boxes.length;
-        boxes.push([]);
-        for(let y = yMin; y <= yMax; y += yStep){
-          yIndex[Math.floor(y/yStep)] = boxes[boxes.length - 1].length;
-          boxes[boxes.length - 1].push(0);
+      if(boxes.length === 0) {
+        for(let x = xMin; x <= xMax; x += xStep){
+          xIndex[Math.floor(x/xStep)] = boxes.length;
+          boxes.push([]);
+          for(let y = yMin; y <= yMax; y += yStep){
+            yIndex[Math.floor(y/yStep)] = boxes[boxes.length - 1].length;
+            boxes[boxes.length - 1].push(0);
+          }
         }
       }
 
       // Sample trajectories, incrementing boxes if trajectories escapes
-      let max = 1;
       for(let i=0; i < numSamples; i++) {
         let x = xMin + (xMax - xMin)*Math.random();
         let y = yMin + (yMax - yMin)*Math.random();
@@ -144,22 +137,32 @@
         }
       }
 
-      return boxes;
+      return {boxes: boxes, max: max};
     }
 
     function plot(context) {
-      let red = computeBoxes(5000);
-      let green = computeBoxes(500);
-      let blue = computeBoxes(50);
+      let numSamples = 50000;
+      let red = computeBoxes(5000, numSamples);
+      let green = computeBoxes(500, numSamples);
+      let blue = computeBoxes(50, numSamples);
 
-      for(let x = xMin; x <= xMax; x += xStep){
-        for(let y = yMin; y <= yMax; y += yStep){
-          xi = xIndex[Math.floor(x/xStep)];
-          yi = yIndex[Math.floor(y/yStep)];
-          context.fillStyle = color(red[xi][yi], green[xi][yi], blue[xi][yi]);
-          context.fillRect(yScale*y + yOffset - stride/2, xScale*x + xOffset - stride/2, stride, stride);
+      setInterval(() => {
+        for(let x = xMin; x <= xMax; x += xStep) {
+          for(let y = yMin; y <= yMax; y += yStep) {
+            xi = xIndex[Math.floor(x/xStep)];
+            yi = yIndex[Math.floor(y/yStep)];
+            context.fillStyle = color(red.boxes[xi][yi], green.boxes[xi][yi], blue.boxes[xi][yi]);
+            context.fillRect(yScale*y + yOffset - stride/2, xScale*x + xOffset - stride/2, stride, stride);
+
+            red.boxes[xi][yi] = red.max*red.boxes[xi][yi];
+            green.boxes[xi][yi] = green.max*green.boxes[xi][yi];
+            blue.boxes[xi][yi] = blue.max*blue.boxes[xi][yi];
+          }
         }
-      }
+        red = computeBoxes(5000, numSamples, red.boxes, red.max);
+        green = computeBoxes(500, numSamples, green.boxes, green.max);
+        blue = computeBoxes(50, numSamples, blue.boxes, blue.max);
+      }, 1);
     }
 
     plot(ctx);
