@@ -2,7 +2,7 @@
 <!DOCTYPE html>
 <html>
   <meta charset="UTF-8">
-  <title>Mandelbrot set</title>
+  <title>Budhabrot</title>
 
   <style>
 
@@ -33,54 +33,13 @@
     ctx.canvas.height = window.innerHeight - 20;
     ctx.canvas.width  = ctx.canvas.height;
 
+    // Number of samples per worker call
+    let numSamples = 1000000;
+
     // Specify the range of plot in the complex plane.
     // We assume it's of the form [xMin, xMax, yMin, yMax]
     var range = [-1.9, 1.1, -1.5, 1.5];
 
-    // The stride is inversely proportional to resolution. Lesser values implies higher resolution
-    // at computational cost. It is the amount of pixels skiped per xStep or yStep.
-    let stride = 1.0;
-
-    // In all the functions below we model a complex number as a hash {"Re": x, "Im": y}
-    function squared_modulus(z) {
-      return z.Re*z.Re + z.Im*z.Im;
-    }
-
-    // Compute one step of the iteration. Note that if z = x + iy and c = a + bi, then we have:
-    // z^2 + c = (x^2 - y^2 + a) + i(2xy + b)
-    function compute(z, c) {
-      return {
-        "Re": z.Re*z.Re - z.Im*z.Im + c.Re,
-        "Im": 2*z.Re*z.Im + c.Im
-        }
-    }
-
-    // Compute number of iterations until point modulus get bigger than 2 (guaranteed scape)
-    function computeTrajectory(c, maxSteps) {
-      var trajectory = [];
-      var z = {"Re": 0.0, "Im": 0.0};
-      for(let steps = 0; steps <= maxSteps; steps++) {
-        z = compute(z, c);
-        trajectory.push(z);
-        if(squared_modulus(z) > 4) {
-          return trajectory;
-        }
-      }
-      return null;
-    }
-
-    function colorIntensity(rawIntensity) {
-      return 255.0*rawIntensity;
-    }
-
-    function color(r, g, b) {
-      r = colorIntensity(r);
-      g = colorIntensity(g);
-      b = colorIntensity(b);
-      return "rgb(" + r + "," + g + "," + b + ")";
-    }
-
-    // Function to compute boxes statistics
     let [xMin, xMax, yMin, yMax] = range;
     let xIndex = {};
     let yIndex = {};
@@ -90,6 +49,10 @@
     let xScale = ctx.canvas.width/(xMax - xMin);
     let yScale = ctx.canvas.height/(yMax - yMin);
 
+    // The stride is inversely proportional to resolution. Lesser values implies higher resolution
+    // at computational cost. It is the amount of pixels skiped per xStep or yStep.
+    let stride = 1.0;
+
     // Compute step size in plots dimensions (stepFactor is in pixels)
     let xStep = stride/xScale;
     let yStep = stride/yScale;
@@ -97,66 +60,79 @@
     let xOffset = -xScale*xMin;
     let yOffset = -yScale*yMin;
 
-    function computeBoxes(maxSteps, numSamples = 1000000, boxes = [], max = 1) {
+    function colorIntensity(rawIntensity) {
+      return 255.0*Math.log(1 + rawIntensity)/Math.log(2);
+    }
+
+    function color(r, g, b) {
+      let a = 1.0 - (r + g + b)/3.0;
+      r = colorIntensity(r);
+      g = colorIntensity(g);
+      b = colorIntensity(b);
+
+      return `rgba(${r},${g},${b},${a})`;
+    }
+
+    function initializeBoxes() {
       // Initialize boxes
-      if(boxes.length === 0) {
-        for(let x = xMin; x <= xMax; x += xStep){
-          xIndex[Math.floor(x/xStep)] = boxes.length;
-          boxes.push([]);
-          for(let y = yMin; y <= yMax; y += yStep){
-            yIndex[Math.floor(y/yStep)] = boxes[boxes.length - 1].length;
-            boxes[boxes.length - 1].push(0);
-          }
+      let boxes = [];
+      for(let x = xMin; x <= xMax; x += xStep) {
+        xIndex[Math.floor(x/xStep)] = boxes.length;
+        boxes.push([]);
+        for(let y = yMin; y <= yMax; y += yStep){
+          yIndex[Math.floor(y/yStep)] = boxes[boxes.length - 1].length;
+          boxes[boxes.length - 1].push(0);
         }
       }
 
-      // Sample trajectories, incrementing boxes if trajectories escapes
-      for(let i=0; i < numSamples; i++) {
-        let x = xMin + (xMax - xMin)*Math.random();
-        let y = yMin + (yMax - yMin)*Math.random();
-        let c = {'Re': x, 'Im': y};
-        let trajectory = computeTrajectory(c, maxSteps);
-        if(trajectory) {
-          for(let j = 0; j < trajectory.length; j++) {
-            let p = trajectory[j];
-            let xi = xIndex[Math.floor(p['Re']/xStep)];
-            let yi = yIndex[Math.floor(p['Im']/yStep)];
-            if(boxes[xi] !== undefined && boxes[xi][yi] !== undefined) {
-              boxes[xi][yi] += 1
-              if(boxes[xi][yi] > max) max = boxes[xi][yi];
-            };
-          }
+      return boxes;
+    }
+
+    let red = {boxes: initializeBoxes(), max: 1, maxSteps: 5000};
+    let green = {boxes: initializeBoxes(), max: 1, maxSteps: 500};
+    let blue = {boxes: initializeBoxes(), max: 1, maxSteps: 50};
+
+    function plot() {
+      for(let x = xMin; x <= xMax; x += xStep) {
+        for(let y = yMin; y <= yMax; y += yStep) {
+          xi = xIndex[Math.floor(x/xStep)];
+          yi = yIndex[Math.floor(y/yStep)];
+          ctx.fillStyle = color(red.boxes[xi][yi]/red.max, green.boxes[xi][yi]/green.max, blue.boxes[xi][yi]/blue.max);
+          ctx.fillRect(yScale*y + yOffset - stride/2, xScale*x + xOffset - stride/2, stride, stride);
         }
       }
-
-      return {boxes: boxes, max: max};
     }
 
-    function plot(context) {
-      let numSamples = 200000;
-      let red = computeBoxes(5000, numSamples);
-      let green = computeBoxes(500, numSamples);
-      let blue = computeBoxes(50, numSamples);
+    function start() {
+      let redWorker = new Worker('computeBoxes.js');
+      let greenWorker = new Worker('computeBoxes.js');
+      let blueWorker = new Worker('computeBoxes.js');
+      let baseParams = {numSamples: numSamples, range: range, xIndex: xIndex, yIndex: yIndex, xScale: xScale, yScale: yScale, stride: stride};
 
-      setInterval(() => {
-        for(let x = xMin; x <= xMax; x += xStep) {
-          for(let y = yMin; y <= yMax; y += yStep) {
-            xi = xIndex[Math.floor(x/xStep)];
-            yi = yIndex[Math.floor(y/yStep)];
-            context.fillStyle = color(red.boxes[xi][yi]/red.max, green.boxes[xi][yi]/green.max, blue.boxes[xi][yi]/blue.max);
-            context.fillRect(yScale*y + yOffset - stride/2, xScale*x + xOffset - stride/2, stride, stride);
-          }
-        }
+      // Setup handlers for workers load
+      redWorker.addEventListener('message', e => {
+        red = e.data;
+        redWorker.postMessage(Object.assign({}, baseParams, red));
+        plot();
+      });
+      greenWorker.addEventListener('message', e => {
+        green = e.data;
+        greenWorker.postMessage(Object.assign({}, baseParams, green));
+        plot();
+      });
+      blueWorker.addEventListener('message', e => {
+        blue = e.data;
+        blueWorker.postMessage(Object.assign({}, baseParams, blue));
+        plot();
+      });
 
-        red = computeBoxes(5000, numSamples, red.boxes, red.max);
-        green = computeBoxes(500, numSamples, green.boxes, green.max);
-        blue = computeBoxes(50, numSamples, blue.boxes, blue.max);
-      }, 1);
+      // Start workers
+      redWorker.postMessage(Object.assign({}, baseParams, red));
+      greenWorker.postMessage(Object.assign({}, baseParams, green));
+      blueWorker.postMessage(Object.assign({}, baseParams, blue));
     }
 
-    document.addEventListener("DOMContentLoaded", () => {
-      plot(ctx);
-    });
+    start();
   </script>
   </body>
 </html>
