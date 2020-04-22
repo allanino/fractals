@@ -65,12 +65,11 @@
     }
 
     function color(r, g, b) {
-      let a = 1.0 - (r + g + b)/3.0;
       r = colorIntensity(r);
       g = colorIntensity(g);
       b = colorIntensity(b);
 
-      return `rgba(${r},${g},${b},${a})`;
+      return `rgb(${r},${g},${b})`;
     }
 
     function initializeBoxes() {
